@@ -1,6 +1,4 @@
-use std::io::Error;
-
-fn main() -> Result<(), Error> {
+fn main() {
     let input = include_str!("../../res/01.txt");
     let mut line: Vec<char> = Vec::new();
     let mut values: Vec<u32> = Vec::new();
@@ -25,6 +23,4 @@ fn main() -> Result<(), Error> {
 
     let sum: u32 = values.iter().sum();
     println!("The total sum is: {}", sum);
-
-    Ok(())
 }
