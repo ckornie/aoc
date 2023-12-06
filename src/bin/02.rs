@@ -36,36 +36,31 @@ fn main() -> Result<()> {
             let mut positions = st.positions(token).to_owned();
             positions.sort();
 
-            let lo = positions.first();
-            if lo.is_some() {
-                if first.is_some() {
-                    let (_, prior) = first.unwrap();
-                    if lo.unwrap().lt(&prior) {
-                        first = Option::Some((*value, *lo.unwrap()));
+            if let Some(lo) = positions.first() {
+                if let Some((_, prior)) = first {
+                    if lo < &prior {
+                        first = Option::Some((*value, *lo));
                     }
                 } else {
-                    first = Option::Some((*value, *lo.unwrap()));
+                    first = Option::Some((*value, *lo));
                 }
             }
 
-            let hi = positions.last();
-            if hi.is_some() {
-                if last.is_some() {
-                    let (_, prior) = last.unwrap();
-                    if hi.unwrap().gt(&prior) {
-                        last = Option::Some((*value, *hi.unwrap()));
+            if let Some(hi) = positions.last() {
+                if let Some((_, prior)) = last {
+                    if hi > &prior {
+                        last = Option::Some((*value, *hi));
                     }
                 } else {
-                    last = Option::Some((*value, *hi.unwrap()));
+                    last = Option::Some((*value, *hi));
                 }
             }
         }
 
-        if first.is_some() && last.is_some() {
-            let (a, _) = first.unwrap();
-            let (b, _) = last.unwrap();
-
-            values.push(format!("{}{}", a, b).parse::<u32>().unwrap());
+        if let Some((a, _)) = first {
+            if let Some((b, _)) = last {
+                values.push(format!("{}{}", a, b).parse::<u32>().unwrap());
+            }
         }
 
         first = None;
