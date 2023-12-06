@@ -1,7 +1,7 @@
 use std::io::Error;
 
 fn main() -> Result<(), Error> {
-    let input = include_str!("../resources/2023-12-01-001.txt");
+    let input = include_str!("../../res/01.txt");
     let mut line: Vec<char> = Vec::new();
     let mut values: Vec<u32> = Vec::new();
 
