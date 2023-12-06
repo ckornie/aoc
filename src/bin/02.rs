@@ -59,7 +59,8 @@ fn main() -> Result<()> {
 
         if let Some((a, _)) = first {
             if let Some((b, _)) = last {
-                values.push(format!("{}{}", a, b).parse::<u32>().unwrap());
+                let value = format!("{}{}", a, b).parse::<u32>()?;
+                values.push(value);
             }
         }
 
