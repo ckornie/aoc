@@ -3,13 +3,10 @@ use regex::Regex;
 use std::collections::HashMap;
 
 pub fn check_games(input: &str, constraints: &HashMap<&str, u32>) -> u32 {
-    let v: Vec<u32> = input
+    input
         .split_inclusive('\n')
         .filter_map(|x| check_game(x, constraints).ok())
-        .collect();
-
-    println!("{:?}", v);
-    return v.iter().sum();
+        .sum()
 }
 
 fn check_game(line: &str, constraints: &HashMap<&str, u32>) -> Result<u32> {
