@@ -1,47 +1,45 @@
 use anyhow::{bail, Context, Result};
+use regex::Regex;
 use std::collections::HashMap;
 
-pub fn check_games(text: &str, check: &HashMap<&str, u32>) -> Result<u32> {
-    text.split('\n')
-        .map(parse_line)
-        .for_each(|a| println!("{:?}", a));
+pub fn check_games(input: &str, constraints: &HashMap<&str, u32>) -> u32 {
+    let v: Vec<u32> = input
+        .split_inclusive('\n')
+        .filter_map(|x| check_game(x, constraints).ok())
+        .collect();
 
-    Ok(0)
+    println!("{:?}", v);
+    return v.iter().sum();
 }
 
-fn parse_line(line: &str) -> Result<(u32, Vec<Vec<(&str, u32)>>)> {
-    if let Some((a, b)) = line.split_once(':') {
-        return Ok((parse_id(a)?, parse_samples(b)));
-    }
-    bail!("unexpected format {}", line);
-}
-
-fn parse_id(substring: &str) -> Result<u32> {
-    substring
-        .replace("Game ", "")
-        .parse::<u32>()
-        .with_context(|| format!("couldn't find game in {}", substring))
-}
-
-fn parse_samples(substring: &str) -> Vec<Vec<(&str, u32)>> {
-    substring
-        .split("; ")
-        .map(|samples| {
-            samples
-                .split(", ")
-                .filter_map(|x| parse_sample(x.split_once(' ')))
-                .collect()
-        })
-        .collect()
-}
-
-fn parse_sample<'a>(pair: Option<(&'a str, &'a str)>) -> Option<(&str, u32)> {
-    if let Some((count, colour)) = pair {
-        if let Ok(count) = count.parse::<u32>() {
-            return Some((colour, count));
+fn check_game(line: &str, constraints: &HashMap<&str, u32>) -> Result<u32> {
+    if let Some((left, right)) = line.split_once(':') {
+        if check_samples(right, constraints)? {
+            return parse_id(left).with_context(|| "parsing error");
         }
     }
-    None
+    bail!("parsing error")
+}
+
+fn parse_id(text: &str) -> Result<u32> {
+    text.replace("Game ", "")
+        .parse::<u32>()
+        .with_context(|| format!("couldn't find game in {}", text))
+}
+
+fn check_samples(text: &str, constraints: &HashMap<&str, u32>) -> Result<bool> {
+    for (k, v) in constraints {
+        let r: Regex = Regex::new((format!(r"(\d*) {}[;,\n]", k)).as_str())?;
+        let t = r
+            .captures_iter(text)
+            .filter_map(|m| m.get(1)?.as_str().parse::<u32>().ok())
+            .any(|x| x > *v);
+        if t {
+            return Ok(false);
+        }
+    }
+
+    Ok(true)
 }
 
 #[cfg(test)]
@@ -50,9 +48,10 @@ mod tests {
 
     #[test]
     fn part_1() -> Result<()> {
-        let check: HashMap<&str, u32> = HashMap::from([("red", 12), ("green", 13), ("blue", 14)]);
+        let constraints: HashMap<&str, u32> =
+            HashMap::from([("red", 12), ("green", 13), ("blue", 14)]);
         let input = include_str!("../res/02.txt");
-        assert_eq!(check_games(input, &check)?, 0);
+        assert_eq!(check_games(input, &constraints), 1994);
         Ok(())
     }
 }
