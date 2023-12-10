@@ -1,52 +1,67 @@
-use anyhow::{bail, Context, Result};
-use regex::Regex;
+use anyhow::{anyhow, Context, Result};
 use std::collections::HashMap;
 
-pub fn check_games(input: &str, constraints: &HashMap<&str, u32>) -> Result<u32> {
-    let c = compile(constraints)?;
+#[derive(Debug)]
+pub struct Game<'a> {
+    id: u32,
+    samples: Vec<HashMap<&'a str, u32>>,
+}
 
-    Ok(input
+impl<'a> Game<'a> {
+    fn try_new(line: &'a str) -> Result<Self> {
+        let (id, samples) = line
+            .split_once(':')
+            .with_context(|| format!("parsing error on line: {:?}", line))?;
+        Ok(Self {
+            id: parse_id(id)?,
+            samples: parse_samples(samples)?,
+        })
+    }
+}
+
+pub fn parse_games<'a>(input: &'a str) -> Result<Vec<Game<'a>>> {
+    input
         .split_inclusive('\n')
-        .filter_map(|x| check_game(x, &c).ok())
-        .sum())
+        .map(|l| Game::try_new(l))
+        .collect()
 }
 
-fn compile(constraints: &HashMap<&str, u32>) -> Result<Vec<(Regex, u32)>> {
-    let mut compiled: Vec<(Regex, u32)> = Vec::new();
-    for (k, v) in constraints {
-        let r: Regex = Regex::new((format!(r"(\d*) {}[;,\n]", k)).as_str())?;
-        compiled.push((r, *v));
-    }
-    Ok(compiled)
+fn parse_samples<'a>(text: &'a str) -> Result<Vec<HashMap<&'a str, u32>>> {
+    text.split(';').map(|s| parse_sample(s)).collect()
 }
 
-fn check_game(line: &str, constraints: &Vec<(Regex, u32)>) -> Result<u32> {
-    if let Some((left, right)) = line.split_once(':') {
-        if check_samples(right, constraints)? {
-            return parse_id(left).with_context(|| "parsing error");
-        }
-    }
-    bail!("parsing error")
+fn parse_sample<'a>(text: &'a str) -> Result<HashMap<&'a str, u32>> {
+    text.split(',')
+        .filter_map(|x| x.trim().split_once(' '))
+        .map(|x| {
+            let (a, b) = x;
+            if let Ok(c) = a.parse::<u32>() {
+                Ok((b, c))
+            } else {
+                Err(anyhow!(format!("parsing error on line: {:?}", text)))
+            }
+        })
+        .collect()
 }
 
 fn parse_id(text: &str) -> Result<u32> {
-    text.replace("Game ", "")
+    text["Game ".len()..]
         .parse::<u32>()
-        .with_context(|| format!("couldn't find game in {}", text))
+        .with_context(|| format!("couldn't find game id in {}", text))
 }
 
-fn check_samples(text: &str, constraints: &Vec<(Regex, u32)>) -> Result<bool> {
-    for (r, v) in constraints {
-        let t = r
-            .captures_iter(text)
-            .filter_map(|m| m.get(1)?.as_str().parse::<u32>().ok())
-            .any(|x| x > *v);
-        if t {
-            return Ok(false);
-        }
-    }
-
-    Ok(true)
+pub fn check_validity<'a>(games: Vec<Game<'a>>, constraints: &HashMap<&str, u32>) -> u32 {
+    games
+        .iter()
+        .filter(|game| {
+            !constraints.iter().any(|(k, v)| {
+                game.samples
+                    .iter()
+                    .any(|sample| sample.get(k).is_some_and(|y| y > v))
+            })
+        })
+        .map(|game| game.id)
+        .sum::<u32>()
 }
 
 #[cfg(test)]
@@ -58,7 +73,7 @@ mod tests {
         let constraints: HashMap<&str, u32> =
             HashMap::from([("red", 12), ("green", 13), ("blue", 14)]);
         let input = include_str!("../res/02.txt");
-        assert_eq!(check_games(input, &constraints)?, 1734);
+        assert_eq!(check_validity(parse_games(input)?, &constraints), 1734);
         Ok(())
     }
 }
