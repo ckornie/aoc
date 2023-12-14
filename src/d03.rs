@@ -1,26 +1,31 @@
-use anyhow::{anyhow, Context, Error, Result};
+use anyhow::{anyhow, bail, Context, Error, Result};
+use itertools::Itertools;
 
 const SPACER: char = '.';
+const GEAR: char = '*';
 
 #[derive(Debug)]
 pub struct Part {
-    number: Vec<char>,
-    row: usize,
-    column: usize,
+    number: u32,
 }
 
-impl Part {
-    fn left_bound(&self) -> usize {
-        self.column.checked_add_signed(-1).unwrap_or(0)
-    }
+impl TryFrom<Vec<&char>> for Part {
+    type Error = anyhow::Error;
 
-    fn right_bound(&self) -> usize {
-        if self.column == 0 {
-            self.number.len()
-        } else {
-            self.column + self.number.len()
-        }
+    fn try_from(value: Vec<&char>) -> std::result::Result<Self, self::Error> {
+        String::from_iter(value)
+            .parse::<u32>()
+            .map(|number| Part { number })
+            .with_context(|| format!("could not parse part number"))
     }
+}
+
+#[derive(Debug)]
+pub struct Marker {
+    symbol: char,
+    parts: Vec<Part>,
+    row: usize,
+    column: usize,
 }
 
 struct Schematic {
@@ -28,30 +33,50 @@ struct Schematic {
 }
 
 impl Schematic {
-    fn validate(&self, part: &Part) -> bool {
-        self.neighbours(part)
-            .iter()
-            .any(|c| !c.is_digit(10) && *c != SPACER)
-    }
-
-    fn neighbours(&self, part: &Part) -> Vec<char> {
-        self.adjacent(part, 0)
+    fn scan(&self, row: usize, column: usize) -> Result<Vec<Part>> {
+        [self.line(row, -1), self.line(row, 0), self.line(row, 1)]
             .into_iter()
-            .chain(self.adjacent(part, -1).into_iter())
-            .chain(self.adjacent(part, 1).into_iter())
-            .collect()
+            .filter_map(|line| line)
+            .map(|line| self.parts(line, column))
+            .flatten_ok()
+            .collect::<Result<Vec<Part>>>()
     }
 
-    fn adjacent(&self, part: &Part, offset: isize) -> Vec<char> {
-        part.row.checked_add_signed(offset).map_or(vec![], |v| {
-            self.lines.get(v).map_or(vec![], |line| {
-                line.iter()
-                    .skip(part.left_bound())
-                    .take(part.right_bound() - part.left_bound() + 1)
-                    .cloned()
-                    .collect()
-            })
-        })
+    fn line(&self, row: usize, offset: isize) -> Option<&Vec<char>> {
+        row.checked_add_signed(offset)
+            .map_or(None, |i| self.lines.get(i))
+    }
+
+    fn parts(&self, row: &Vec<char>, offset: usize) -> Result<Vec<Part>> {
+        let mut left: Vec<&char> = row
+            .iter()
+            .rev()
+            .skip(row.len() - offset)
+            .take_while(|e| e.is_digit(10))
+            .collect();
+        left.reverse();
+
+        let right: Vec<&char> = row
+            .iter()
+            .skip(offset + 1)
+            .take_while(|e| e.is_digit(10))
+            .collect();
+
+        row.get(offset).map_or_else(
+            || bail!("expected character"),
+            |character| {
+                if character.is_digit(10) {
+                    left.push(character);
+                    left.extend(right);
+                    Part::try_from(left).map(|part| vec![part])
+                } else {
+                    [Part::try_from(left), Part::try_from(right)]
+                        .into_iter()
+                        .filter(|e| e.is_ok())
+                        .collect()
+                }
+            },
+        )
     }
 }
 
@@ -67,7 +92,7 @@ impl From<&str> for Schematic {
 }
 
 impl IntoIterator for Schematic {
-    type Item = Part;
+    type Item = Result<Marker>;
     type IntoIter = SchematicIntoIterator;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -85,29 +110,8 @@ pub struct SchematicIntoIterator {
     column: usize,
 }
 
-impl SchematicIntoIterator {
-    fn read_number(&mut self, buffer: &mut Vec<char>) {
-        match self.schematic.lines.get(self.row) {
-            Some(line) => match line.get(self.column) {
-                Some(character) => {
-                    self.column = self.column + 1;
-                    if character.is_digit(10) {
-                        buffer.push(*character);
-                        self.read_number(buffer)
-                    }
-                }
-                None => {
-                    self.row = self.row + 1;
-                    self.column = 0;
-                }
-            },
-            None => (),
-        }
-    }
-}
-
 impl Iterator for SchematicIntoIterator {
-    type Item = Part;
+    type Item = Result<Marker>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let row = self.row;
@@ -115,23 +119,15 @@ impl Iterator for SchematicIntoIterator {
 
         match self.schematic.lines.get(row) {
             Some(line) => match line.get(column) {
-                Some(character) => {
+                Some(symbol) => {
                     self.column = self.column + 1;
-                    if character.is_digit(10) {
-                        let mut number = vec![*character];
-                        self.read_number(&mut number);
-
-                        let part = Part {
-                            number,
+                    if !symbol.is_digit(10) && !symbol.eq(&SPACER) {
+                        Some(self.schematic.scan(row, column).map(|parts| Marker {
+                            symbol: *symbol,
+                            parts,
                             row,
                             column,
-                        };
-
-                        if self.schematic.validate(&part) {
-                            Some(part)
-                        } else {
-                            self.next()
-                        }
+                        }))
                     } else {
                         self.next()
                     }
@@ -153,39 +149,56 @@ mod tests {
     use std::fs;
 
     #[test]
-    fn example_part_1() -> Result<()> {
+    fn part_1_example() -> Result<()> {
         let input = include_str!("../res/03.example");
         let actual: Vec<u32> = Schematic::from(input)
             .into_iter()
-            .map(|p| String::from_iter(p.number))
-            .map(|s| s.parse::<u32>().with_context(|| "failed to parse"))
+            .map(|result| result.map(|marker| marker.parts))
+            .flatten_ok()
+            .map(|result| result.map(|part| part.number))
             .collect::<Result<Vec<u32>>>()?;
         assert_eq!(actual.into_iter().sum::<u32>(), 4361);
         Ok(())
     }
 
     #[test]
-    fn part_1() -> Result<()> {
+    fn part_1_actual() -> Result<()> {
         let input = include_str!("../res/03.actual");
-        let schematic = Schematic::from(input);
-        let actual: Vec<u32> = schematic
+        let actual: Vec<u32> = Schematic::from(input)
             .into_iter()
-            .map(|p| String::from_iter(p.number))
-            .map(|s| s.parse::<u32>().with_context(|| "failed to parse"))
+            .map(|result| result.map(|marker| marker.parts))
+            .flatten_ok()
+            .map(|result| result.map(|part| part.number))
             .collect::<Result<Vec<u32>>>()?;
-        assert_eq!(actual.into_iter().sum::<u32>(), 538046);
+        assert_eq!(actual.into_iter().sum::<u32>(), 538_046);
         Ok(())
     }
 
     #[test]
-    fn part_2() -> Result<()> {
-        let input = include_str!("../res/03.actual");
-        let schematic = Schematic::from(input);
-        let actual: Vec<String> = schematic
+    fn part_2_example() -> Result<()> {
+        let input = include_str!("../res/03.example");
+        let actual: Vec<u32> = Schematic::from(input)
             .into_iter()
-            .map(|p| String::from_iter(p.number))
-            .collect();
-        fs::write("/tmp/parts.txt", actual.join("\n"))?;
+            .filter_ok(|marker| marker.symbol.eq(&GEAR) && marker.parts.len() == 2)
+            .map(|result| {
+                result.map(|marker| marker.parts.iter().map(|parts| parts.number).product())
+            })
+            .collect::<Result<Vec<u32>>>()?;
+        assert_eq!(actual.into_iter().sum::<u32>(), 467_835);
+        Ok(())
+    }
+
+    #[test]
+    fn part_2_actual() -> Result<()> {
+        let input = include_str!("../res/03.actual");
+        let actual: Vec<u32> = Schematic::from(input)
+            .into_iter()
+            .filter_ok(|marker| marker.symbol.eq(&GEAR) && marker.parts.len() == 2)
+            .map(|result| {
+                result.map(|marker| marker.parts.iter().map(|parts| parts.number).product())
+            })
+            .collect::<Result<Vec<u32>>>()?;
+        assert_eq!(actual.into_iter().sum::<u32>(), 81_709_807);
         Ok(())
     }
 }
