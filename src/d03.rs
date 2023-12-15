@@ -119,11 +119,11 @@ impl Iterator for SchematicIntoIterator {
 
         match self.schematic.lines.get(row) {
             Some(line) => match line.get(column) {
-                Some(symbol) => {
+                Some(&symbol) => {
                     self.column = self.column + 1;
-                    if !symbol.is_digit(10) && !symbol.eq(&SPACER) {
+                    if !symbol.is_digit(10) && symbol != SPACER {
                         Some(self.schematic.scan(row, column).map(|parts| Marker {
-                            symbol: *symbol,
+                            symbol,
                             parts,
                             row,
                             column,
@@ -146,10 +146,9 @@ impl Iterator for SchematicIntoIterator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
 
     #[test]
-    fn part_1_example() -> Result<()> {
+    fn example_1() -> Result<()> {
         let input = include_str!("../res/03.example");
         let actual: Vec<u32> = Schematic::from(input)
             .into_iter()
@@ -162,7 +161,7 @@ mod tests {
     }
 
     #[test]
-    fn part_1_actual() -> Result<()> {
+    fn solution_1() -> Result<()> {
         let input = include_str!("../res/03.actual");
         let actual: Vec<u32> = Schematic::from(input)
             .into_iter()
@@ -175,7 +174,7 @@ mod tests {
     }
 
     #[test]
-    fn part_2_example() -> Result<()> {
+    fn example_2() -> Result<()> {
         let input = include_str!("../res/03.example");
         let actual: Vec<u32> = Schematic::from(input)
             .into_iter()
@@ -189,7 +188,7 @@ mod tests {
     }
 
     #[test]
-    fn part_2_actual() -> Result<()> {
+    fn solution_2() -> Result<()> {
         let input = include_str!("../res/03.actual");
         let actual: Vec<u32> = Schematic::from(input)
             .into_iter()
