@@ -114,7 +114,7 @@ mod tests {
     #[test]
     fn part_2_actual() -> Result<()> {
         let input = include_str!("../res/04.actual");
-        assert_eq!(cards(input)?, 30);
+        assert_eq!(cards(input)?, 8549735);
         Ok(())
     }
 }
