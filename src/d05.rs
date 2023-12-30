@@ -3,128 +3,131 @@ use itertools::Itertools;
 
 #[derive(Debug)]
 pub struct Bijection {
-    domain: u64,
-    codomain: u64,
-    span: u64,
+    start: i64,
+    end: i64,
+    offset: i64,
 }
 
 impl Bijection {
-    fn map(&self, seed: u64) -> Option<u64> {
-        if self.domain <= seed && self.domain + self.span > seed {
-            if let Ok(change) = self.offset() {
-                seed.checked_add_signed(change)
-            } else {
-                None
-            }
+    fn location(&self, seed: i64) -> Option<i64> {
+        if self.start <= seed && self.end > seed {
+            Some(seed + self.offset)
         } else {
             None
         }
     }
-
-    fn offset(&self) -> Result<i64> {
-        let domain = i64::try_from(self.domain).with_context(|| "cannot cast domain")?;
-        let codomain = i64::try_from(self.codomain).with_context(|| "cannot cast codomain")?;
-        Ok(codomain - domain)
-    }
 }
 
 #[derive(Debug)]
-pub struct Almanac {
-    seeds: Vec<u64>,
+pub struct Data {
+    seeds: Vec<i64>,
     bijections: Vec<Vec<Bijection>>,
 }
 
-pub fn parse_almanac(
-    data: &str,
-    parser: &dyn Fn(Option<&str>) -> Result<Vec<u64>>,
-) -> Result<Almanac> {
-    let lines: Vec<&str> = data.lines().collect();
-    let seeds = parser(lines[0].get("seeds: ".len()..))?;
-    let mut bijections: Vec<Vec<Bijection>> = vec![];
-    let mut map: Vec<Bijection> = vec![];
+impl TryFrom<&str> for Data {
+    type Error = anyhow::Error;
 
-    for i in 1..lines.len() {
-        let line = lines[i];
-        if !line.is_empty() {
-            if line.ends_with(" map:") && !map.is_empty() {
-                map.sort_by(|a, b| a.domain.cmp(&b.domain));
-                bijections.push(map);
-                map = vec![];
-            } else if let Some((Ok(codomain), Ok(domain), Ok(span))) = line
-                .split(' ')
-                .map(|number| number.parse::<u64>())
-                .collect_tuple()
-            {
-                map.push(Bijection {
-                    domain,
-                    codomain,
-                    span,
-                });
+    fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
+        let lines: Vec<&str> = value.lines().collect();
+        let seeds = (lines[0].get("seeds: ".len()..))
+            .unwrap_or("")
+            .split(' ')
+            .map(|seed| seed.parse::<i64>().with_context(|| "cannot parse seeds"))
+            .collect::<Result<Vec<i64>>>()?;
+
+        let mut bijections: Vec<Vec<Bijection>> = vec![];
+        let mut map: Vec<Bijection> = vec![];
+
+        for i in 1..lines.len() {
+            let line = lines[i];
+            if !line.is_empty() {
+                if line.ends_with(" map:") && !map.is_empty() {
+                    bijections.push(map);
+                    map = vec![];
+                } else if let Some((Ok(codomain), Ok(domain), Ok(span))) = line
+                    .split(' ')
+                    .map(|number| number.parse::<i64>())
+                    .collect_tuple()
+                {
+                    map.push(Bijection {
+                        start: domain,
+                        end: domain + span,
+                        offset: codomain - domain,
+                    });
+                }
             }
         }
-    }
 
-    map.sort_by(|a, b| a.domain.cmp(&b.domain));
-    bijections.push(map);
-    consolidate(&bijections);
+        map.sort_by(|a, b| a.start.cmp(&b.start));
+        bijections.push(map);
 
-    Ok(Almanac { seeds, bijections })
-}
-
-fn consolidate(bijections: &Vec<Vec<Bijection>>) -> u64 {
-    for map in bijections.iter().rev() {
-        println!("{:?}", map);
-    }
-
-    0
-}
-
-fn parse_seeds(seeds: Option<&str>) -> Result<Vec<u64>> {
-    if let Some(seeds) = seeds {
-        seeds
-            .split(' ')
-            .map(|seed| seed.parse::<u64>().with_context(|| "cannot parse seeds"))
-            .collect::<Result<Vec<u64>>>()
-    } else {
-        bail!("could not parse seeds")
+        Ok(Data { seeds, bijections })
     }
 }
 
-fn parse_seed_ranges(seeds: Option<&str>) -> Result<Vec<u64>> {
-    let result: Vec<u64> = parse_seeds(seeds)?
-        .into_iter()
-        .tuples::<(u64, u64)>()
-        .map(|(start, length)| {
-            let mut seeds: Vec<u64> = vec![];
-            for i in start..start + length {
-                seeds.push(i);
-            }
-            seeds
-        })
-        .flatten()
-        .collect();
-    Ok(result)
+struct PartOne {
+    data: Data,
 }
 
-pub fn lowest_location(almanac: Result<Almanac>) -> Result<u64> {
-    let mut lowest = u64::MAX;
-    if let Ok(almanac) = almanac {
-        for seed in almanac.seeds {
+impl PartOne {
+    fn lowest(&self) -> i64 {
+        let mut lowest = i64::MAX;
+        for &seed in &self.data.seeds {
             let mut seed = seed;
-            for bijections in &almanac.bijections {
+            for bijections in &self.data.bijections {
                 for maps in bijections {
-                    if let Some(x) = maps.map(seed) {
-                        seed = x;
+                    if let Some(location) = maps.location(seed) {
+                        seed = location;
                         break;
                     }
                 }
             }
             lowest = if lowest < seed { lowest } else { seed }
         }
+
+        lowest
     }
-    Ok(lowest)
 }
 
+struct PartTwo {
+    data: Data,
+}
+
+impl PartTwo {
+    fn seeds(&self) -> Vec<i64> {
+        self.data
+            .seeds
+            .iter()
+            .tuples::<(&i64, &i64)>()
+            .map(|(&start, &length)| {
+                let mut seeds: Vec<i64> = vec![];
+                for i in start..start + length {
+                    seeds.push(i);
+                }
+                seeds
+            })
+            .flatten()
+            .collect()
+    }
+
+    fn lowest(&self) -> i64 {
+        let mut lowest = i64::MAX;
+        for seed in self.seeds() {
+            let mut seed = seed;
+            for bijections in &self.data.bijections {
+                for maps in bijections {
+                    if let Some(location) = maps.location(seed) {
+                        seed = location;
+                        break;
+                    }
+                }
+            }
+            lowest = if lowest < seed { lowest } else { seed }
+        }
+
+        lowest
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -132,33 +135,40 @@ mod tests {
     #[test]
     fn part_1_example() -> Result<()> {
         let input = include_str!("../res/05.example");
-        assert_eq!(lowest_location(parse_almanac(input, &parse_seeds))?, 35);
+        let almanac = PartOne {
+            data: Data::try_from(input)?,
+        };
+        assert_eq!(almanac.lowest(), 35);
         Ok(())
     }
 
     #[test]
     fn part_1_actual() -> Result<()> {
         let input = include_str!("../res/05.actual");
-        assert_eq!(
-            lowest_location(parse_almanac(input, &parse_seeds))?,
-            486_613_012
-        );
+        let almanac = PartOne {
+            data: Data::try_from(input)?,
+        };
+        assert_eq!(almanac.lowest(), 486_613_012);
         Ok(())
     }
 
     #[test]
     fn part_2_example() -> Result<()> {
         let input = include_str!("../res/05.example");
-        assert_eq!(
-            lowest_location(parse_almanac(input, &parse_seed_ranges))?,
-            46
-        );
+        let almanac = PartTwo {
+            data: Data::try_from(input)?,
+        };
+        assert_eq!(almanac.lowest(), 46);
         Ok(())
     }
 
     #[test]
     fn part_2_actual() -> Result<()> {
         let input = include_str!("../res/05.actual");
+        let almanac = PartTwo {
+            data: Data::try_from(input)?,
+        };
+        assert_eq!(almanac.lowest(), 46);
         Ok(())
     }
 }
