@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Context, Error, Result};
+use anyhow::{bail, Context, Error, Result};
 use itertools::Itertools;
 
 const SPACER: char = '.';
@@ -24,8 +24,6 @@ impl TryFrom<Vec<&char>> for Part {
 pub struct Marker {
     symbol: char,
     parts: Vec<Part>,
-    row: usize,
-    column: usize,
 }
 
 struct Schematic {
@@ -122,12 +120,11 @@ impl Iterator for SchematicIntoIterator {
                 Some(&symbol) => {
                     self.column = self.column + 1;
                     if !symbol.is_digit(10) && symbol != SPACER {
-                        Some(self.schematic.scan(row, column).map(|parts| Marker {
-                            symbol,
-                            parts,
-                            row,
-                            column,
-                        }))
+                        Some(
+                            self.schematic
+                                .scan(row, column)
+                                .map(|parts| Marker { symbol, parts }),
+                        )
                     } else {
                         self.next()
                     }
@@ -143,6 +140,23 @@ impl Iterator for SchematicIntoIterator {
     }
 }
 
+pub fn part_one(input: &str) -> Result<Vec<u32>> {
+    Schematic::from(input)
+        .into_iter()
+        .map(|result| result.map(|marker| marker.parts))
+        .flatten_ok()
+        .map(|result| result.map(|part| part.number))
+        .collect()
+}
+
+pub fn part_two(input: &str) -> Result<Vec<u32>> {
+    Schematic::from(input)
+        .into_iter()
+        .filter_ok(|marker| marker.symbol.eq(&GEAR) && marker.parts.len() == 2)
+        .map(|result| result.map(|marker| marker.parts.iter().map(|parts| parts.number).product()))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -150,54 +164,28 @@ mod tests {
     #[test]
     fn example_1() -> Result<()> {
         let input = include_str!("../res/03.example");
-        let actual: Vec<u32> = Schematic::from(input)
-            .into_iter()
-            .map(|result| result.map(|marker| marker.parts))
-            .flatten_ok()
-            .map(|result| result.map(|part| part.number))
-            .collect::<Result<Vec<u32>>>()?;
-        assert_eq!(actual.into_iter().sum::<u32>(), 4361);
+        assert_eq!(part_one(input)?.into_iter().sum::<u32>(), 4361);
         Ok(())
     }
 
     #[test]
     fn solution_1() -> Result<()> {
         let input = include_str!("../res/03.actual");
-        let actual: Vec<u32> = Schematic::from(input)
-            .into_iter()
-            .map(|result| result.map(|marker| marker.parts))
-            .flatten_ok()
-            .map(|result| result.map(|part| part.number))
-            .collect::<Result<Vec<u32>>>()?;
-        assert_eq!(actual.into_iter().sum::<u32>(), 538_046);
+        assert_eq!(part_one(input)?.into_iter().sum::<u32>(), 538_046);
         Ok(())
     }
 
     #[test]
     fn example_2() -> Result<()> {
         let input = include_str!("../res/03.example");
-        let actual: Vec<u32> = Schematic::from(input)
-            .into_iter()
-            .filter_ok(|marker| marker.symbol.eq(&GEAR) && marker.parts.len() == 2)
-            .map(|result| {
-                result.map(|marker| marker.parts.iter().map(|parts| parts.number).product())
-            })
-            .collect::<Result<Vec<u32>>>()?;
-        assert_eq!(actual.into_iter().sum::<u32>(), 467_835);
+        assert_eq!(part_two(input)?.into_iter().sum::<u32>(), 467_835);
         Ok(())
     }
 
     #[test]
     fn solution_2() -> Result<()> {
         let input = include_str!("../res/03.actual");
-        let actual: Vec<u32> = Schematic::from(input)
-            .into_iter()
-            .filter_ok(|marker| marker.symbol.eq(&GEAR) && marker.parts.len() == 2)
-            .map(|result| {
-                result.map(|marker| marker.parts.iter().map(|parts| parts.number).product())
-            })
-            .collect::<Result<Vec<u32>>>()?;
-        assert_eq!(actual.into_iter().sum::<u32>(), 81_709_807);
+        assert_eq!(part_two(input)?.into_iter().sum::<u32>(), 81_709_807);
         Ok(())
     }
 }
