@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use anyhow::{anyhow, bail, Context, Error, Result};
-use itertools::Itertools;
+use anyhow::{bail, Context, Result};
 
 #[derive(Debug)]
 pub struct Card {
