@@ -149,7 +149,7 @@ mod tests {
     #[test]
     fn part_2_actual() -> Result<()> {
         let input = include_str!("../res/05.actual");
-        assert_eq!(part_two(Data::try_from(input)?), Some(56931769));
+        assert_eq!(part_two(Data::try_from(input)?), Some(56_931_769));
         Ok(())
     }
 }
