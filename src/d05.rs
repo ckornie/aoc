@@ -105,7 +105,7 @@ pub fn part_two(data: Data) -> Option<i64> {
                 let (result, supremum) =
                     data.mapping
                         .iter()
-                        .fold((seed, i64::MAX), |(seed, supremum), map| {
+                        .fold((seed, seed + length), |(seed, supremum), map| {
                             map.iter()
                                 .filter_map(|bijection| bijection.location(seed))
                                 .min_by(|a, b| a.supremum.cmp(&b.supremum))
