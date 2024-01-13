@@ -1,5 +1,4 @@
-use anyhow::{bail, Context, Error, Result};
-use itertools::Itertools;
+use anyhow::{anyhow, bail, Context, Result};
 use std::collections::HashMap;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -21,9 +20,21 @@ impl TryFrom<&str> for Waypoint {
             .split_once(", ")
             .with_context(|| "unexpected file format")?;
 
-        let key: [char; 3] = key.chars().collect::<Vec<char>>().try_into().unwrap();
-        let left: [char; 3] = left.chars().collect::<Vec<char>>().try_into().unwrap();
-        let right: [char; 3] = right.chars().collect::<Vec<char>>().try_into().unwrap();
+        let key: [char; 3] = key
+            .chars()
+            .collect::<Vec<char>>()
+            .try_into()
+            .map_err(|_| anyhow!("invalid key"))?;
+        let left: [char; 3] = left
+            .chars()
+            .collect::<Vec<char>>()
+            .try_into()
+            .map_err(|_| anyhow!("invalid left value"))?;
+        let right: [char; 3] = right
+            .chars()
+            .collect::<Vec<char>>()
+            .try_into()
+            .map_err(|_| anyhow!("invalid right value"))?;
 
         Ok(Waypoint { key, left, right })
     }
