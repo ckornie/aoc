@@ -15,6 +15,7 @@ impl TryFrom<&str> for Waypoint {
         let (key, directions) = value
             .split_once(" = (")
             .with_context(|| "unexpected file format")?;
+
         let (left, right) = directions
             .trim_end_matches(')')
             .split_once(", ")
@@ -71,7 +72,7 @@ impl TryFrom<&str> for Map {
     }
 }
 
-pub fn part_one(input: &str) -> Result<i64> {
+pub fn part_one(input: &str) -> Result<usize> {
     let map = Map::try_from(input)?;
     let terminus: [char; 3] = ['Z', 'Z', 'Z'];
     let mut location = ['A', 'A', 'A'];
@@ -88,17 +89,57 @@ pub fn part_one(input: &str) -> Result<i64> {
         };
 
         if location == terminus {
-            return i64::try_from(i)
-                .with_context(|| "hops exceeded")
-                .map(|i| i + 1);
+            return Ok(i + 1);
         }
     }
 
     bail!("hops exceeded");
 }
 
-pub fn part_two(input: &str) -> Result<i64> {
-    Ok(0)
+pub fn part_two(input: &str) -> Result<usize> {
+    let map = Map::try_from(input)?;
+    let mut locations: Vec<[char; 3]> = map
+        .waypoints
+        .iter()
+        .map(|(k, _)| *k)
+        .filter(|e| e.ends_with(&['A']))
+        .collect();
+
+    let mut intervals: Vec<usize> = vec![];
+
+    for location in &mut locations {
+        for i in 0.. {
+            let instruction = map.instructions[i % map.instructions.len()];
+            let waypoint = map
+                .waypoints
+                .get(location)
+                .with_context(|| "location not found")?;
+
+            if instruction == 'L' {
+                location.clone_from(&waypoint.left);
+            } else {
+                location.clone_from(&waypoint.right);
+            };
+
+            if location.ends_with(&['Z']) {
+                intervals.push(i + 1);
+                break;
+            }
+        }
+    }
+
+    let product: usize = intervals
+        .iter()
+        .map(|&interval| {
+            if interval % map.instructions.len() == 0 {
+                interval / map.instructions.len()
+            } else {
+                interval
+            }
+        })
+        .product();
+
+    Ok(product * map.instructions.len())
 }
 
 #[cfg(test)]
@@ -108,7 +149,7 @@ mod tests {
 
     #[test]
     fn part_1_example() -> Result<()> {
-        let input = include_str!("../res/08.example");
+        let input = include_str!("../res/08-1.example");
         assert_eq!(part_one(input)?, 2);
         Ok(())
     }
@@ -122,15 +163,15 @@ mod tests {
 
     #[test]
     fn part_2_example() -> Result<()> {
-        let input = include_str!("../res/08.example");
-        assert_eq!(part_two(input)?, 0);
+        let input = include_str!("../res/08-2.example");
+        assert_eq!(part_two(input)?, 6);
         Ok(())
     }
 
     #[test]
     fn part_2_actual() -> Result<()> {
         let input = include_str!("../res/08.actual");
-        assert_eq!(part_two(input)?, 0);
+        assert_eq!(part_two(input)?, 15_726_453_850_399);
         Ok(())
     }
 }
