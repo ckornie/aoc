@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use std::collections::VecDeque;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 enum Spring {
@@ -36,79 +36,137 @@ impl Spring {
     }
 }
 
-fn possibilities(runs: &mut VecDeque<usize>, springs: &[Spring]) -> i64 {
-    let mut count = 0;
+struct Evaluation {
+    runs: Vec<usize>,
+    springs: Vec<Spring>,
+}
 
-    if let Some(run) = runs.pop_front() {
-        if runs.is_empty() {
-            for i in 0..springs.len().saturating_sub(run - 1) {
-                count = count
-                    + if valid_termination(&springs[i..], run) {
-                        1
-                    } else {
-                        0
-                    };
+impl Evaluation {
+    fn permutations(
+        &self,
+        run_idx: usize,
+        spring_idx: usize,
+        cache: &mut HashMap<(usize, usize), i64>,
+    ) -> i64 {
+        let key = (run_idx, spring_idx);
 
-                if springs[i] == Spring::Damaged {
-                    runs.push_front(run);
-                    return count;
-                }
-            }
+        if let Some(&result) = cache.get(&key) {
+            result
         } else {
-            for i in 0..springs.len().saturating_sub(run + 1) {
-                let end = i + run;
-                count = count
-                    + if valid_run(&springs[i..end + 1]) {
-                        possibilities(runs, &springs[end + 1..springs.len()])
+            let result = if self.required(run_idx) > self.springs.len() - spring_idx {
+                0
+            } else if let Some(&run) = self.runs.get(run_idx) {
+                if run_idx == self.runs.len() - 1 {
+                    if self.anchored(spring_idx) {
+                        if self.run_of(spring_idx, run) && self.no_more(spring_idx, run) {
+                            1
+                        } else {
+                            0
+                        }
                     } else {
-                        0
-                    };
-
-                if springs[i] == Spring::Damaged {
-                    runs.push_front(run);
-                    return count;
+                        if self.run_of(spring_idx, run) && self.no_more(spring_idx, run) {
+                            1 + self.permutations(run_idx, spring_idx + 1, cache)
+                        } else {
+                            self.permutations(run_idx, spring_idx + 1, cache)
+                        }
+                    }
+                } else {
+                    if self.anchored(spring_idx) {
+                        if self.run_of(spring_idx, run) && self.fine(spring_idx, run) {
+                            self.permutations(run_idx + 1, spring_idx + run + 1, cache)
+                        } else {
+                            0
+                        }
+                    } else {
+                        if self.run_of(spring_idx, run) && self.fine(spring_idx, run) {
+                            self.permutations(run_idx + 1, spring_idx + run + 1, cache)
+                                + self.permutations(run_idx, spring_idx + 1, cache)
+                        } else {
+                            self.permutations(run_idx, spring_idx + 1, cache)
+                        }
+                    }
                 }
-            }
+            } else {
+                0
+            };
+
+            cache.insert(key, result);
+            result
         }
-        runs.push_front(run);
     }
 
-    count
-}
+    fn required(&self, idx: usize) -> usize {
+        self.runs.iter().skip(idx).sum::<usize>() + self.runs.len() - idx - 1
+    }
 
-fn valid_termination(springs: &[Spring], end: usize) -> bool {
-    springs[..end].iter().all(|spring| spring.damaged())
-        && springs[end..]
+    fn anchored(&self, idx: usize) -> bool {
+        self.springs
+            .get(idx)
+            .is_some_and(|&spring| spring == Spring::Damaged)
+    }
+
+    fn run_of(&self, idx: usize, run: usize) -> bool {
+        self.springs
             .iter()
-            .all(|&spring| spring != Spring::Damaged)
-}
+            .skip(idx)
+            .take(run)
+            .all(|spring| spring.damaged())
+    }
 
-fn valid_run(springs: &[Spring]) -> bool {
-    springs[0..springs.len() - 1]
-        .iter()
-        .all(|spring| spring.damaged())
-        && springs[springs.len() - 1].fine()
+    fn no_more(&self, idx: usize, run: usize) -> bool {
+        self.springs
+            .iter()
+            .skip(idx + run)
+            .all(|&spring| spring != Spring::Damaged)
+    }
+
+    fn fine(&self, idx: usize, run: usize) -> bool {
+        self.springs
+            .get(idx + run)
+            .is_some_and(|spring| spring.fine())
+    }
 }
 
 pub fn part_one(data: &str) -> Result<i64> {
     data.lines()
         .filter_map(|line| line.split_once(' '))
         .map(|(springs, totals)| {
-            let mut runs = totals
+            let runs = totals
                 .split(',')
                 .map(|total| total.parse::<usize>())
-                .collect::<Result<VecDeque<_>, _>>()
+                .collect::<Result<Vec<_>, _>>()
                 .with_context(|| "invalid total")?;
 
             let springs: Vec<Spring> = springs.chars().map(|spring| Spring::from(spring)).collect();
 
-            Ok(possibilities(&mut runs, &springs[..]))
+            Ok(Evaluation { runs, springs }.permutations(0, 0, &mut HashMap::new()))
         })
         .sum::<Result<i64>>()
 }
 
-pub fn part_two(_input: &str) -> Result<i64> {
-    Ok(0)
+pub fn part_two(data: &str) -> Result<i64> {
+    data.lines()
+        .filter_map(|line| line.split_once(' '))
+        .map(|(springs, totals)| {
+            let runs: Vec<usize> = totals
+                .split(',')
+                .map(|total| total.parse::<usize>())
+                .collect::<Result<Vec<_>, _>>()
+                .with_context(|| "invalid total")?;
+
+            let runs: Vec<usize> = (0..5).flat_map(|_| &runs).copied().collect::<Vec<_>>();
+
+            let springs: Vec<Spring> = springs
+                .chars()
+                .map(|spring| Spring::from(spring))
+                .chain([Spring::Unknown].into_iter())
+                .cycle()
+                .take(springs.len() * 5 + 4)
+                .collect();
+
+            Ok(Evaluation { runs, springs }.permutations(0, 0, &mut HashMap::new()))
+        })
+        .sum::<Result<i64>>()
 }
 
 #[cfg(test)]
@@ -133,7 +191,7 @@ mod tests {
 
     #[test]
     fn part_1_actual() -> Result<()> {
-        let input = include_str!("../res/12.actual");
+        let input = include_str!("../res/12");
         assert_eq!(part_one(input)?, 7307);
         Ok(())
     }
@@ -149,14 +207,14 @@ mod tests {
             "?###???????? 3,2,1"
         );
 
-        assert_eq!(part_two(sample)?, 0);
+        assert_eq!(part_two(sample)?, 525_152);
         Ok(())
     }
 
     #[test]
     fn part_2_actual() -> Result<()> {
-        let input = include_str!("../res/11.actual");
-        assert_eq!(part_two(input)?, 0);
+        let input = include_str!("../res/12");
+        assert_eq!(part_two(input)?, 3_415_570_893_842);
         Ok(())
     }
 }
