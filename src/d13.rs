@@ -1,34 +1,38 @@
-use anyhow::Result;
-use std::{cmp, collections::HashSet};
+use std::{cmp, collections::HashMap};
 
-fn compare(left: &[char], right: &[char]) -> bool {
+fn compare(left: &[char], right: &[char]) -> usize {
+    let mut count = 0;
     for i in 0..cmp::min(left.len(), right.len()) {
         if left[left.len() - i - 1] != right[i] {
-            return false;
+            count = count + 1;
         }
     }
-
-    true
+    count
 }
 
-fn mirror(data: &Vec<Vec<char>>, width: usize) -> Option<usize> {
-    let mut column: HashSet<usize> = (1..width).collect();
+fn mirror(data: &Vec<Vec<char>>, width: usize, errors: usize) -> Option<usize> {
+    let mut counts: HashMap<usize, usize> = (1..width).map(|i| (i, 0)).collect();
     for row in data.iter() {
         for i in 1..width {
-            if !compare(&row[..i], &row[i..]) {
-                column.remove(&i);
-            }
+            let compare = compare(&row[..i], &row[i..]);
+            counts.entry(i).and_modify(|count| (*count += compare));
         }
     }
 
-    if let &[index] = column.into_iter().collect::<Vec<usize>>().as_slice() {
+    if let &[index] = counts
+        .into_iter()
+        .filter(|&(_, v)| v == errors)
+        .map(|(k, _)| k)
+        .collect::<Vec<usize>>()
+        .as_slice()
+    {
         Some(index)
     } else {
         None
     }
 }
 
-pub fn symmetry(data: &str) -> usize {
+pub fn symmetry(data: &str, errors: usize) -> usize {
     let mut result = 0;
 
     if let Some(width) = data.find("\n") {
@@ -39,7 +43,7 @@ pub fn symmetry(data: &str) -> usize {
             .map(|i| (0..width).map(|j| data[(i * width) + j]).collect())
             .collect();
 
-        result = mirror(&first, width)
+        result = mirror(&first, width, errors)
             .map(|value| result + value)
             .unwrap_or(result);
 
@@ -47,7 +51,7 @@ pub fn symmetry(data: &str) -> usize {
             .map(|i| (0..length / width).map(|j| data[i + (j * width)]).collect())
             .collect();
 
-        result = mirror(&second, length / width)
+        result = mirror(&second, length / width, errors)
             .map(|value| result + value * 100)
             .unwrap_or(result);
     }
@@ -56,11 +60,11 @@ pub fn symmetry(data: &str) -> usize {
 }
 
 pub fn part_one(data: &str) -> usize {
-    data.split("\n\n").map(|chart| symmetry(chart)).sum()
+    data.split("\n\n").map(|chart| symmetry(chart, 0)).sum()
 }
 
-pub fn part_two(_data: &str) -> Result<usize> {
-    Ok(0)
+pub fn part_two(data: &str) -> usize {
+    data.split("\n\n").map(|chart| symmetry(chart, 1)).sum()
 }
 
 #[cfg(test)]
@@ -119,14 +123,14 @@ mod tests {
             "#....#..#\n",
         );
 
-        assert_eq!(part_two(input)?, 0);
+        assert_eq!(part_two(input), 400);
         Ok(())
     }
 
     #[test]
     fn part_2_actual() -> Result<()> {
         let input = include_str!("../res/13");
-        assert_eq!(part_two(input)?, 0);
+        assert_eq!(part_two(input), 37_617);
         Ok(())
     }
 }
