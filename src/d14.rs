@@ -6,33 +6,22 @@ pub fn part_one(data: &str) -> usize {
         let length = data.len();
         let height = length / width;
 
-        let mut tilted = vec![];
-
-        for (mut i, &c) in data.iter().enumerate() {
-            tilted.push(c);
-
-            if c == 'O' {
-                while let Some(j) = i.checked_sub(width) {
-                    if tilted[j] == '.' {
-                        tilted[j] = 'O';
-                        tilted[i] = '.';
-                        i = j;
+        (0..width)
+            .flat_map(|c| {
+                let mut weights = vec![];
+                (0..height).fold(0, |last, r| {
+                    let i = c + (r * width);
+                    if data[i] == 'O' {
+                        weights.push(height - last);
+                        last + 1
+                    } else if data[i] == '#' {
+                        r + 1
                     } else {
-                        break;
+                        last
                     }
-                }
-            }
-        }
+                });
 
-        tilted
-            .iter()
-            .enumerate()
-            .filter_map(|(i, &c)| {
-                if c == 'O' {
-                    return Some(height - i / width);
-                } else {
-                    None
-                }
+                weights
             })
             .sum()
     } else {
