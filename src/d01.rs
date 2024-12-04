@@ -1,32 +1,34 @@
-use anyhow::{anyhow, Result};
-use itertools::Itertools;
-
-fn location(data: &str, idx: usize) -> Result<Vec<i64>, String> {
-    data.split("\n")
-        .filter(|row| !row.is_empty())
-        .map(|row| {
-            row.split(' ')
-                .filter(|loc| !loc.is_empty())
-                .nth(idx)
-                .and_then(|loc| loc.trim().parse::<i64>().ok())
-                .ok_or(format!("could not parse {} from {}", idx, row))
-        })
-        .sorted()
-        .collect()
-}
+use anyhow::{bail, Result};
 
 pub fn part_one(data: &str) -> Result<i64> {
-    match (location(data, 0), location(data, 1)) {
-        (Ok(left), Ok(right)) => {
-            let mut count = 0;
-            for (l, r) in left.into_iter().zip(right) {
-                count = count + (l - r).abs();
-            }
-            Ok(count)
+    let mut lft = vec![];
+    let mut rgt = vec![];
+
+    for values in data
+        .split("\n")
+        .filter(|line| !line.is_empty())
+        .map(|line| line.split_once(' '))
+    {
+        match values {
+            Some((l, r)) => match (l.trim().parse::<i64>(), r.trim().parse::<i64>()) {
+                (Ok(l), Ok(r)) => {
+                    lft.push(l);
+                    rgt.push(r);
+                }
+                _ => bail!("could not parse '{}' or '{}'", l, r),
+            },
+            _ => bail!("could not parse"),
         }
-        (Err(msg), _) => Err(anyhow!(msg)),
-        (_, Err(msg)) => Err(anyhow!(msg)),
     }
+
+    lft.sort();
+    rgt.sort();
+
+    let mut count = 0;
+    for (l, r) in lft.into_iter().zip(rgt) {
+        count = count + (l - r).abs();
+    }
+    Ok(count)
 }
 
 pub fn part_two(_data: &str) -> usize {
