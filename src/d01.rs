@@ -24,11 +24,7 @@ pub fn part_one(data: &str) -> Result<i64> {
     lft.sort();
     rgt.sort();
 
-    let mut count = 0;
-    for (l, r) in lft.into_iter().zip(rgt) {
-        count = count + (l - r).abs();
-    }
-    Ok(count)
+    Ok(lft.into_iter().zip(rgt).map(|(l, r)| (l - r).abs()).sum())
 }
 
 pub fn part_two(_data: &str) -> usize {
