@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::{bail, Result};
 
 pub fn part_one(data: &str) -> Result<i64> {
@@ -27,8 +29,30 @@ pub fn part_one(data: &str) -> Result<i64> {
     Ok(lft.into_iter().zip(rgt).map(|(l, r)| (l - r).abs()).sum())
 }
 
-pub fn part_two(_data: &str) -> usize {
-    0
+pub fn part_two(data: &str) -> Result<i64> {
+    let mut lft = vec![];
+    let mut rgt: HashMap<i64, i64> = HashMap::new();
+
+    for values in data
+        .split("\n")
+        .filter(|line| !line.is_empty())
+        .map(|line| line.split_once(' '))
+    {
+        match values {
+            Some((l, r)) => match (l.trim().parse::<i64>(), r.trim().parse::<i64>()) {
+                (Ok(l), Ok(r)) => {
+                    lft.push(l);
+                    *rgt.entry(r).or_insert(0) += 1;
+                }
+                _ => bail!("could not parse '{}' or '{}'", l, r),
+            },
+            _ => bail!("could not parse"),
+        }
+    }
+
+    lft.sort();
+
+    Ok(lft.into_iter().map(|l| l * rgt.get(&l).unwrap_or(&0)).sum())
 }
 
 #[cfg(test)]
@@ -53,14 +77,14 @@ mod tests {
     #[test]
     fn part_2_example() -> Result<()> {
         let input = concat!("3   4\n", "4   3\n", "2   5\n", "1   3\n", "3   9\n", "3   3\n",);
-        assert_eq!(part_two(input), 0);
+        assert_eq!(part_two(input)?, 31);
         Ok(())
     }
 
     #[test]
     fn part_2_actual() -> Result<()> {
         let input = include_str!("../res/01");
-        assert_eq!(part_two(input), 0);
+        assert_eq!(part_two(input)?, 26_800_609);
         Ok(())
     }
 }
